@@ -31,10 +31,10 @@ const controller = {
       /* 1 2 3 4 5 6 7 8 9 10 */
       // limit 5, offset 0,  la paginación comienza desde 0. 1 2 3 4 5.
       // limit 5, offset 5,  la paginación comienza desde 6. 6 7 5 9 10.
-
+      
       const typesSort = ["name", "price", "discount", "category", "newest"]; // tipos de ordenamientos
 
-        /* ---------COMPROVACIONES---------------------- */
+        /* --------COMPROVACIONES----------------------- */
       limit = +limit > 10 ? 10 : +limit;
 
       salesDiscount = +salesDiscount < 10 ? 10 : +salesDiscount;
@@ -43,13 +43,34 @@ const controller = {
 
       page = +page <= 0 || isNaN(+page) ? 1 : +page; // si la pagina es menor a 0 o son letras nos manda la pagina 1 o sino mando lo que manda el usuario
       /* ---------FIN DE COMPROVACIONES----------------- */
+
+      /* ---------URL QUERIES--------------------------- */
+      const queriesValuesDefaultAndModify = {
+        limit,
+        sales,
+        salesDiscount,
+        price,
+        order,
+        sortBy,
+        search
+      };
+
+      let urlQuery = ""
+      const queries = queriesValuesDefaultAndModify // Valor por defecto de las query y las modificadas
+     
+      for (const key in queries) {
+        urlQuery += `&${key}=${queries[key]}`
+      } // recorre propiedas de un objeto, el key es el nombre de las propiedades del objeto
       
+      /* ---------FIN URL QUERIES----------------------- */
+
       page -= 1;
 
       offset = page * limit;
 
       const orderQuery = sortBy === "category" ? [["category","name",order]] : sortBy === "newest" ? [["createdAt","desc"]] : [[sortBy,order]]
 
+      /* ---------OPTIONS DEFAULT----------------------- */
       let options = {
         limit,
         offset,
@@ -80,9 +101,23 @@ const controller = {
           exclude: ["updateAt", "createAt", "deleteAt"],
           include: [],
         },
-        order: orderQuery
+        order: orderQuery,
+        where:{
+          [Op.or]:[
+            {
+              name:{
+                [Op.substring]: search
+              }
+            },
+            {
+              description:{
+                [Op.substring]: search
+              }
+            }
+          ]
+        }
       };
-       /* ---------SALES Y SALES DESCOUNT--------------- */
+       /* --------SALES Y SALES DESCOUNT---------------- */
       const optionSales = {
         ...options,
         where: {
@@ -118,11 +153,20 @@ const controller = {
       const { count, rows: products } = await db.Product.findAndCountAll(
         options
       );
+
+      if (!products.length) {
+        return res.status(200).json({
+          ok:true,
+          status:204,
+          message:"No hay productos en esta pagina"
+        })
+      }
+
       const existPrev = page > 0 && offset <= count;
       /*  offset 20 y mi cantidad total es de 16 == false */
 
       const existNext =
-        Math.floor(count / limit) >= page + 1 && limit === count;
+        Math.floor(count / limit) >= page + 1 && limit !== count;
       /* 16/5 */ /*  Math.floor redonde para abajo  */
 
       let urlPrev = null;
@@ -131,12 +175,12 @@ const controller = {
       if (existNext) {
         urlNext = `${req.protocol}://${req.get("host")}${req.baseUrl}?page=${
           page + 2
-        }`;
+        }${urlQuery}`;
       }
       if (existPrev) {
         urlPrev = `${req.protocol}://${req.get("host")}${
           req.baseUrl
-        }?page=${page}`;
+        }?page=${page}${urlQuery}`;
       }
 
       return res.status(200).json({
